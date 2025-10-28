@@ -1,0 +1,137 @@
+// Program ini mengontrol 5 buah servo berdasarkan sensor MPU6050 dan deteksi PIR
+// Servo bergerak mengikuti orientasi (roll, pitch, yaw), dan bereaksi terhadap gerakan PIR
+// Dibuat oleh: Falih Muhammad Altaf
+// NIM: 25/561469/TK/63435
+
+#include <Wire.h>
+#include <ESP32Servo.h>
+#include <MPU6050_tockn.h>
+
+// Deklarasi objek servo
+Servo servo1, servo2, servo3, servo4, servo5;
+
+// Definisi pin servo dan sensor
+#define PIN_SERVO1 23
+#define PIN_SERVO2 22
+#define PIN_SERVO3 14
+#define PIN_SERVO4 12
+#define PIN_SERVO5 13
+#define PIN_PIR 17
+#define INITIAL_ANGLE 0.0
+
+// Objek sensor MPU6050
+MPU6050 mpu(Wire);
+
+// Variabel status sistem
+bool deteksi = false;      // Menyimpan status jika PIR mendeteksi gerakan
+bool inPIRMode = false;    // Menandakan sistem sedang bereaksi terhadap PIR
+bool tahanYaw = false;     // Menahan gerakan yaw sementara
+
+// Variabel waktu
+long deteksi_waktu = 0;
+long yawTime = 0;
+long timer = 0;
+
+// Konstanta durasi
+const long PIR_FREE_DURATION = 1500;  // Lama waktu reaksi PIR (ms)
+const long SERVO_5_HOLD = 1000;       // Lama waktu servo 5 menahan posisi yaw (ms)
+
+// Variabel sudut sensor
+float angleX = 0, angleY = 0, angleZ = 0;
+float roll = 0, pitch = 0, yaw = 0;
+
+// Target sudut servo
+float target1 = INITIAL_ANGLE, target2 = INITIAL_ANGLE;
+float target3 = INITIAL_ANGLE, target4 = INITIAL_ANGLE;
+float target5 = INITIAL_ANGLE;
+
+// ISR untuk mendeteksi perubahan pada sensor PIR
+void pir() {
+  deteksi = true;                // Set status deteksi menjadi true
+  deteksi_waktu = millis();      // Catat waktu deteksi
+}
+
+// Fungsi untuk mengembalikan semua servo ke posisi awal
+void ResetGerakan() {
+  target1 = target2 = target3 = target4 = target5 = INITIAL_ANGLE;
+}
+
+void setup() {
+  Serial.begin(115200);
+  delay(200);
+
+  // Inisialisasi pin input PIR
+  pinMode(PIN_PIR, INPUT);
+  attachInterrupt(digitalPinToInterrupt(PIN_PIR), pir, RISING); // Aktifkan interrupt pada sinyal naik
+
+  // Inisialisasi servo dan set posisi awal
+  servo1.attach(PIN_SERVO1);
+  servo2.attach(PIN_SERVO2);
+  servo3.attach(PIN_SERVO3);
+  servo4.attach(PIN_SERVO4);
+  servo5.attach(PIN_SERVO5);
+
+  int initialPos = map(INITIAL_ANGLE, -90, 90, 0, 180);
+  servo1.write(initialPos);
+  servo2.write(initialPos);
+  servo3.write(initialPos);
+  servo4.write(initialPos);
+  servo5.write(initialPos);
+
+  // Inisialisasi sensor MPU6050
+  Wire.begin(21, 22);            // Jalur I2C (SDA=21, SCL=22)
+  mpu.begin();
+  mpu.calcGyroOffsets(true);     // Kalibrasi sensor gyro
+  timer = millis();
+
+  Serial.println("Sistem siap berjalan...");
+}
+
+void loop() {
+  // Update data sensor MPU6050
+  mpu.update();
+  angleX = mpu.getAngleX();
+  angleY = mpu.getAngleY();
+  angleZ = mpu.getAngleZ();
+
+  // Jika PIR mendeteksi gerakan
+  if (deteksi) {
+    deteksi = false;
+    inPIRMode = true;
+    deteksi_waktu = millis();
+
+    // Gerakan khusus saat PIR aktif
+    target1 = 60; target2 = -60;
+    target3 = 45; target4 = -45;
+    target5 = 60;
+
+    Serial.println("=== PIR aktif ===");
+  }
+
+  // Mode khusus ketika PIR aktif
+  if (inPIRMode) {
+    servo1.write(map(target1, -90, 90, 0, 180));
+    servo2.write(map(target2, -90, 90, 0, 180));
+    servo3.write(map(target3, -90, 90, 0, 180));
+    servo4.write(map(target4, -90, 90, 0, 180));
+    servo5.write(map(target5, -90, 90, 0, 180));
+
+    if (millis() - deteksi_waktu >= PIR_FREE_DURATION) {
+      inPIRMode = false;
+      ResetGerakan();
+    }
+    return; // Hindari logika MPU saat mode PIR aktif
+  }
+
+  // Mode normal: gerakan mengikuti orientasi sensor MPU6050
+  roll = constrain(angleX, -90.0, 90.0);
+  pitch = constrain(angleY, -90.0, 90.0);
+  yaw = constrain(angleZ, -90.0, 90.0);
+
+  // Mapping sudut sensor menjadi sudut servo
+  servo1.write(map(-roll, -90, 90, 0, 180)); // Roll positif → servo melawan arah
+  servo2.write(map(-roll, -90, 90, 0, 180));
+  servo3.write(map(pitch, -90, 90, 0, 180)); // Pitch positif → servo searah
+  servo4.write(map(pitch, -90, 90, 0, 180));
+  servo5.write(map(yaw, -90, 90, 0, 180));   // Yaw mengikuti arah rotasi
+}
