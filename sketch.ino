@@ -44,8 +44,8 @@ void setup() {
   Serial.begin(115200);
   delay(200);
 
-  pinMode(PIN_PIR, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(PIN_PIR), pir, CHANGE);
+  pinMode(PIN_PIR, INPUT);
+  attachInterrupt(digitalPinToInterrupt(PIN_PIR), pir, RISING);
 
   servo1.attach(PIN_SERVO1);
   servo2.attach(PIN_SERVO2);
@@ -60,7 +60,7 @@ void setup() {
   servo4.write(initialPos);
   servo5.write(initialPos);
 
-  Wire.begin(21, 22);  // default SDA=21, SCL=22
+  Wire.begin(21, 16);
   mpu.begin();
   mpu.calcGyroOffsets(true);
   timer = millis();
@@ -76,39 +76,34 @@ void loop() {
     deteksi = false;
     inPIRMode = true;
     deteksi_waktu = millis();
+
     target1 = 60; target2 = -60;
     target3 = 45; target4 = -45;
     target5 = 60;
   }
 
   if (inPIRMode) {
+    servo1.write(map(target1, -90, 90, 0, 180));
+    servo2.write(map(target2, -90, 90, 0, 180));
+    servo3.write(map(target3, -90, 90, 0, 180));
+    servo4.write(map(target4, -90, 90, 0, 180));
+    servo5.write(map(target5, -90, 90, 0, 180));
+
     if (millis() - deteksi_waktu >= PIR_FREE_DURATION) {
       inPIRMode = false;
       ResetGerakan();
     }
+    return; 
   }
+
 
   roll = constrain(angleX, -90.0, 90.0);
-  target1 = roll;
-  target2 = roll;
-
   pitch = constrain(angleY, -90.0, 90.0);
-  target3 = pitch;
-  target4 = pitch;
+  yaw = constrain(angleZ, -90.0, 90.0);
 
-  if (tahanYaw) {
-    target5 = constrain(angleZ, -90.0, 90.0);
-    if (millis() - yawTime >= SERVO_5_HOLD) {
-      tahanYaw = false;
-      target5 = INITIAL_ANGLE;
-    }
-  } else {
-    target5 = INITIAL_ANGLE;
-  }
-
-  servo1.write(map(target1, -90, 90, 0, 180));
-  servo2.write(map(target2, -90, 90, 0, 180));
-  servo3.write(map(target3, -90, 90, 0, 180));
-  servo4.write(map(target4, -90, 90, 0, 180));
-  servo5.write(map(target5, -90, 90, 0, 180));
+  servo1.write(map(-roll, -90, 90, 0, 180));
+  servo2.write(map(-roll, -90, 90, 0, 180));
+  servo3.write(map(pitch, -90, 90, 0, 180));
+  servo4.write(map(pitch, -90, 90, 0, 180));
+  servo5.write(map(yaw, -90, 90, 0, 180));
 }
